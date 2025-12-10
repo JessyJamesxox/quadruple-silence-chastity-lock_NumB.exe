@@ -1,0 +1,182 @@
+<!doctype html>
+<html lang="en">
+<head>
+<meta charset="utf-8" />
+<meta name="viewport" content="width=device-width,initial-scale=1" />
+<title>James — Silence Penalty</title>
+<style>
+:root{
+  --bg:#0b1020; --card:#0f1724; --accent:#ff6bcb; --muted:#9aa8bf; --danger:#ff4d6d;
+  color-scheme:dark;
+  font-family: Inter, system-ui, -apple-system, "Segoe UI", Roboto, "Helvetica Neue", Arial;
+}
+*{box-sizing:border-box}
+html,body{height:100%;margin:0;background:linear-gradient(180deg,#071023, #081428);display:flex;align-items:center;justify-content:center;padding:24px}
+.card{background:linear-gradient(180deg, rgba(255,255,255,0.02), rgba(255,255,255,0.01)); padding:26px;border-radius:14px;max-width:680px;width:100%;color:#eaf2ff; box-shadow: 0 12px 40px rgba(3,7,18,0.6);}
+.header{display:flex;align-items:center;justify-content:space-between;gap:12px}
+.title{font-size:20px;margin:0}
+.sub{color:var(--muted);font-size:13px;margin-top:4px}
+.offender{background:rgba(255,255,255,0.03);padding:10px;border-radius:10px;display:inline-block;font-weight:700;color:var(--accent)}
+.lead{margin:12px 0 6px;color:var(--muted);font-size:14px}
+.count{display:flex;gap:10px;justify-content:center;margin:16px 0 6px}
+.unit{background:rgba(255,255,255,0.03);padding:14px 12px;border-radius:10px;min-width:76px;text-align:center}
+.big{font-size:24px;font-weight:800}
+.small{font-size:12px;color:var(--muted)}
+.status{margin-top:10px;text-align:center;font-weight:700}
+.progress-wrap{background:rgba(255,255,255,0.03);height:12px;border-radius:12px;overflow:hidden;margin-top:14px}
+.progress{height:12px;width:0%;border-radius:12px;background:linear-gradient(90deg,var(--accent),#ff9cd9)}
+.buttons{display:flex;gap:8px;justify-content:center;margin-top:14px}
+.btn{padding:8px 12px;border-radius:10px;text-decoration:none;color:white;background:linear-gradient(90deg,var(--accent),#ff4da6);cursor:pointer;border:none}
+.note{margin-top:10px;color:var(--muted);font-size:13px;text-align:center}
+.footer{margin-top:14px;text-align:center;color:var(--muted);font-size:13px}
+
+.badge{background:rgba(255,255,255,0.02);padding:6px 8px;border-radius:8px;font-weight:700;color:var(--danger);display:inline-block}
+
+@keyframes pulse {
+  0% { transform: scale(1); }
+  50% { transform: scale(1.03); }
+  100% { transform: scale(1); }
+}
+</style>
+</head>
+<body>
+<div class="card" id="card">
+  <div class="header">
+    <div>
+      <h1 class="title">James Silence Penalty — <span style="color:var(--accent)">Bratty Enforcement</span></h1>
+      <div class="sub">You ghosted. So he waits. Personalised for <span class="offender">James</span></div>
+    </div>
+    <div style="text-align:right">
+      <div class="badge">Penalty ×4</div>
+      <div style="font-size:12px;color:var(--muted);margin-top:6px">Timezone: Europe/London</div>
+    </div>
+  </div>
+
+  <p class="lead">Silence window used: <strong>2025-12-09 01:00 → 2025-12-10 10:04 (Europe/London)</strong></p>
+
+  <div id="count" class="count">
+    <div class="unit"><div id="days" class="big">--</div><div class="small">Days</div></div>
+    <div class="unit"><div id="hours" class="big">--</div><div class="small">Hours</div></div>
+    <div class="unit"><div id="mins" class="big">--</div><div class="small">Minutes</div></div>
+    <div class="unit"><div id="secs" class="big">--</div><div class="small">Seconds</div></div>
+  </div>
+
+  <div class="status" id="status">Counting down... <span style="color:var(--muted);font-weight:600">(James must wait)</span></div>
+
+  <div class="progress-wrap" aria-hidden="true">
+    <div id="progress" class="progress"></div>
+  </div>
+
+  <div class="buttons">
+    <button id="copy" class="btn">Copy Telegram text</button>
+    <button id="cheat" class="btn">Panic button (for you)</button>
+  </div>
+
+  <div class="note" id="note">When the timer ends a cheeky message will appear. Don't open early unless you're brave.</div>
+  <div class="footer">Made with petty energy. <span style="opacity:0.9">Bratty but justified.</span></div>
+</div>
+
+<!-- Confetti canvas -->
+<canvas id="confetti" style="position:fixed;left:0;top:0;pointer-events:none;display:none"></canvas>
+
+<script>
+// Calculation target: start 2025-12-09 01:00 -> end 2025-12-10 10:04
+// Elapsed: 33h4m -> x4 = 132h16m -> target 2025-12-14 14:16 UTC
+const target = new Date('2025-12-14T14:16:00+00:00');
+
+function pad(n){return String(n).padStart(2,'0')}
+function update(){
+  const now = new Date();
+  let diff = Math.floor((target - now)/1000);
+  if(diff <= 0){
+    document.getElementById('days').textContent='00';
+    document.getElementById('hours').textContent='00';
+    document.getElementById('mins').textContent='00';
+    document.getElementById('secs').textContent='00';
+    document.getElementById('status').innerHTML = '✅ Sentence served. You may attempt contact, James. <span style="color:var(--muted)">Try not to screw it up.</span>';
+    document.getElementById('note').textContent = "Penalty complete. Release granted.";
+    progress.style.width = '100%';
+    launchConfetti();
+    clearInterval(timer);
+    return;
+  }
+  const total = Math.floor((target - start) / 1000);
+  const elapsed = total - diff;
+  const pct = Math.min(100, Math.round((elapsed/total)*100));
+  progress.style.width = pct + '%';
+
+  const days = Math.floor(diff/86400); diff -= days*86400;
+  const hours = Math.floor(diff/3600); diff -= hours*3600;
+  const mins = Math.floor(diff/60); const secs = diff - mins*60;
+
+  document.getElementById('days').textContent = pad(days);
+  document.getElementById('hours').textContent = pad(hours);
+  document.getElementById('mins').textContent = pad(mins);
+  document.getElementById('secs').textContent = pad(secs);
+
+  // Bratty pulse when under 24h remaining
+  if(days === 0 && hours < 24){
+    document.getElementById('card').style.animation = 'pulse 1.6s infinite';
+  }
+}
+
+const start = new Date('2025-12-09T01:00:00+00:00'); // silence started
+update();
+const timer = setInterval(update,1000);
+
+// Copy Telegram text
+document.getElementById('copy').addEventListener('click', async ()=>{
+  const text = `James Silence Penalty — you triggered this.\nPenalty ends: 14 Dec 2025 14:16 (Europe/London).\nDo not message until then.`;
+  try{
+    await navigator.clipboard.writeText(text);
+    document.getElementById('copy').textContent = 'Copied!';
+    setTimeout(()=>document.getElementById('copy').textContent='Copy Telegram text',1400);
+  }catch(e){
+    document.getElementById('copy').textContent = 'Copy failed';
+  }
+});
+
+// Panic button logs your decision locally and shows a cheeky note
+document.getElementById('cheat').addEventListener('click', ()=>{
+  const stamp = new Date().toISOString();
+  const prev = localStorage.getItem('panic_log') || '';
+  localStorage.setItem('panic_log', prev + '\n' + `Panic pressed at ${stamp}`);
+  document.getElementById('status').textContent = "Panic logged. You're already forgiven (but not really).";
+  document.getElementById('note').textContent = "Recorded: you clicked panic. Don't make a habit of it.";
+});
+
+// Confetti (lightweight)
+function launchConfetti(){
+  const c = document.getElementById('confetti');
+  c.style.display = 'block';
+  c.width = window.innerWidth;
+  c.height = window.innerHeight;
+  const ctx = c.getContext('2d');
+  const pieces = [];
+  for(let i=0;i<160;i++){
+    pieces.push({
+      x: Math.random()*c.width, y: Math.random()*-c.height, r: Math.random()*6+4,
+      dx: (Math.random()-0.5)*5, dy: Math.random()*6+2, color: ['#ff6bcb','#ff9cd9','#ffd6ea','#ffffff'][Math.floor(Math.random()*4)]
+    });
+  }
+  let ticks = 0;
+  function frame(){
+    ctx.clearRect(0,0,c.width,c.height);
+    for(const p of pieces){
+      ctx.beginPath();
+      ctx.fillStyle = p.color;
+      ctx.rect(p.x, p.y, p.r, p.r*0.6);
+      ctx.fill();
+      p.x += p.dx; p.y += p.dy;
+      if(p.y > c.height) p.y = -10;
+    }
+    ticks++;
+    if(ticks < 300) requestAnimationFrame(frame);
+    else c.style.display='none';
+  }
+  frame();
+}
+
+</script>
+</body>
+</html>
