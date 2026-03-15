@@ -1,0 +1,950 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+  <meta charset="UTF-8" />
+  <title>External Script &amp; Request Monitor</title>
+  <meta name="viewport" content="width=device-width, initial-scale=1" />
+  <style>
+    :root {
+      --bg: #0a0e17;
+      --surface: #111827;
+      --border: #1e293b;
+      --accent: #38bdf8;
+      --danger: #f43f5e;
+      --warn: #fbbf24;
+      --success: #34d399;
+      --text: #e2e8f0;
+      --muted: #94a3b8;
+    }
+
+    * { box-sizing: border-box; margin: 0; padding: 0; }
+
+    body {
+      font-family: 'SF Mono', 'Cascadia Code', 'Fira Code', 'Consolas', monospace;
+      background: var(--bg);
+      color: var(--text);
+      min-height: 100vh;
+      overflow-x: hidden;
+    }
+
+    header {
+      background: var(--surface);
+      border-bottom: 1px solid var(--border);
+      padding: 16px 24px;
+      display: flex;
+      align-items: center;
+      justify-content: space-between;
+      flex-wrap: wrap;
+      gap: 12px;
+    }
+
+    header h1 {
+      font-size: 1.1rem;
+      font-weight: 700;
+      color: var(--accent);
+      display: flex;
+      align-items: center;
+      gap: 8px;
+    }
+
+    header h1 .pulse {
+      width: 10px;
+      height: 10px;
+      border-radius: 50%;
+      background: var(--success);
+      animation: pulse 1.5s infinite;
+    }
+
+    @keyframes pulse {
+      0%, 100% { opacity: 1; box-shadow: 0 0 0 0 rgba(52,211,153,0.5); }
+      50% { opacity: 0.7; box-shadow: 0 0 0 6px rgba(52,211,153,0); }
+    }
+
+    .controls {
+      display: flex;
+      gap: 8px;
+      flex-wrap: wrap;
+    }
+
+    .controls button {
+      padding: 6px 14px;
+      border: 1px solid var(--border);
+      border-radius: 6px;
+      background: var(--surface);
+      color: var(--text);
+      font-family: inherit;
+      font-size: 0.8rem;
+      cursor: pointer;
+      transition: 0.15s;
+    }
+
+    .controls button:hover {
+      border-color: var(--accent);
+      color: var(--accent);
+    }
+
+    .controls button.active {
+      background: var(--accent);
+      color: var(--bg);
+      border-color: var(--accent);
+    }
+
+    .controls button.danger {
+      border-color: var(--danger);
+      color: var(--danger);
+    }
+
+    .controls button.danger:hover {
+      background: var(--danger);
+      color: #fff;
+    }
+
+    .stats-bar {
+      display: grid;
+      grid-template-columns: repeat(auto-fit, minmax(170px, 1fr));
+      gap: 12px;
+      padding: 16px 24px;
+    }
+
+    .stat-card {
+      background: var(--surface);
+      border: 1px solid var(--border);
+      border-radius: 10px;
+      padding: 14px 18px;
+    }
+
+    .stat-card .label {
+      font-size: 0.7rem;
+      text-transform: uppercase;
+      letter-spacing: 1px;
+      color: var(--muted);
+      margin-bottom: 4px;
+    }
+
+    .stat-card .value {
+      font-size: 1.5rem;
+      font-weight: 700;
+    }
+
+    .stat-card .value.danger { color: var(--danger); }
+    .stat-card .value.warn { color: var(--warn); }
+    .stat-card .value.accent { color: var(--accent); }
+    .stat-card .value.success { color: var(--success); }
+
+    .content {
+      padding: 0 24px 24px;
+    }
+
+    .section-title {
+      font-size: 0.85rem;
+      font-weight: 600;
+      color: var(--accent);
+      margin: 20px 0 10px;
+      text-transform: uppercase;
+      letter-spacing: 1px;
+    }
+
+    .log-table {
+      width: 100%;
+      border-collapse: collapse;
+      font-size: 0.78rem;
+    }
+
+    .log-table th {
+      text-align: left;
+      padding: 8px 12px;
+      background: var(--surface);
+      border-bottom: 2px solid var(--border);
+      color: var(--muted);
+      font-size: 0.7rem;
+      text-transform: uppercase;
+      letter-spacing: 0.5px;
+      position: sticky;
+      top: 0;
+      z-index: 1;
+    }
+
+    .log-table td {
+      padding: 7px 12px;
+      border-bottom: 1px solid var(--border);
+      max-width: 350px;
+      overflow: hidden;
+      text-overflow: ellipsis;
+      white-space: nowrap;
+      vertical-align: top;
+    }
+
+    .log-table tr:hover td {
+      background: rgba(56, 189, 248, 0.05);
+    }
+
+    .log-table tr.severity-high td { border-left: 3px solid var(--danger); }
+    .log-table tr.severity-medium td { border-left: 3px solid var(--warn); }
+    .log-table tr.severity-low td { border-left: 3px solid var(--success); }
+    .log-table tr.severity-info td { border-left: 3px solid var(--muted); }
+
+    .badge {
+      display: inline-block;
+      padding: 2px 8px;
+      border-radius: 4px;
+      font-size: 0.68rem;
+      font-weight: 600;
+      text-transform: uppercase;
+    }
+
+    .badge-script { background: rgba(168,85,247,0.2); color: #c084fc; }
+    .badge-xhr { background: rgba(56,189,248,0.2); color: #7dd3fc; }
+    .badge-fetch { background: rgba(52,211,153,0.2); color: #6ee7b7; }
+    .badge-ws { background: rgba(251,191,36,0.2); color: #fcd34d; }
+    .badge-iframe { background: rgba(244,63,94,0.2); color: #fb7185; }
+    .badge-css { background: rgba(99,102,241,0.2); color: #a5b4fc; }
+    .badge-img { background: rgba(236,72,153,0.2); color: #f9a8d4; }
+    .badge-beacon { background: rgba(249,115,22,0.2); color: #fdba74; }
+    .badge-worker { background: rgba(20,184,166,0.2); color: #5eead4; }
+    .badge-evtsrc { background: rgba(139,92,246,0.2); color: #c4b5fd; }
+    .badge-hidden { background: rgba(244,63,94,0.3); color: #fda4af; }
+    .badge-mutation { background: rgba(234,179,8,0.2); color: #fde047; }
+    .badge-nav { background: rgba(14,165,233,0.2); color: #7dd3fc; }
+
+    .severity-tag {
+      display: inline-block;
+      padding: 1px 6px;
+      border-radius: 3px;
+      font-size: 0.65rem;
+      font-weight: 700;
+      text-transform: uppercase;
+    }
+
+    .sev-high { background: rgba(244,63,94,0.25); color: var(--danger); }
+    .sev-medium { background: rgba(251,191,36,0.25); color: var(--warn); }
+    .sev-low { background: rgba(52,211,153,0.25); color: var(--success); }
+    .sev-info { background: rgba(148,163,184,0.25); color: var(--muted); }
+
+    .table-wrapper {
+      background: var(--surface);
+      border: 1px solid var(--border);
+      border-radius: 10px;
+      overflow: auto;
+      max-height: 55vh;
+    }
+
+    .detail-panel {
+      display: none;
+      position: fixed;
+      top: 0; right: 0;
+      width: 420px;
+      height: 100vh;
+      background: var(--surface);
+      border-left: 1px solid var(--border);
+      box-shadow: -4px 0 20px rgba(0,0,0,0.5);
+      z-index: 100;
+      overflow-y: auto;
+      padding: 24px;
+    }
+
+    .detail-panel.open { display: block; }
+
+    .detail-panel h3 {
+      color: var(--accent);
+      margin-bottom: 16px;
+      display: flex;
+      justify-content: space-between;
+      align-items: center;
+    }
+
+    .detail-panel .close-btn {
+      background: none;
+      border: none;
+      color: var(--muted);
+      font-size: 1.2rem;
+      cursor: pointer;
+    }
+
+    .detail-row {
+      margin-bottom: 12px;
+    }
+
+    .detail-row .dk { font-size: 0.7rem; color: var(--muted); text-transform: uppercase; }
+    .detail-row .dv {
+      font-size: 0.82rem;
+      word-break: break-all;
+      margin-top: 2px;
+      padding: 6px 8px;
+      background: rgba(0,0,0,0.3);
+      border-radius: 4px;
+    }
+
+    .filter-bar {
+      display: flex;
+      gap: 6px;
+      flex-wrap: wrap;
+      margin-bottom: 12px;
+    }
+
+    .filter-bar button {
+      padding: 4px 10px;
+      border: 1px solid var(--border);
+      border-radius: 4px;
+      background: transparent;
+      color: var(--muted);
+      font-family: inherit;
+      font-size: 0.72rem;
+      cursor: pointer;
+    }
+
+    .filter-bar button.active {
+      border-color: var(--accent);
+      color: var(--accent);
+      background: rgba(56,189,248,0.1);
+    }
+
+    .empty-state {
+      text-align: center;
+      padding: 60px 20px;
+      color: var(--muted);
+    }
+
+    .empty-state .icon { font-size: 2.5rem; margin-bottom: 12px; }
+    .empty-state p { font-size: 0.85rem; }
+
+    @media (max-width: 700px) {
+      header { padding: 12px 14px; }
+      .stats-bar { padding: 10px 14px; }
+      .content { padding: 0 14px 14px; }
+      .detail-panel { width: 100%; }
+    }
+  </style>
+</head>
+<body>
+
+<header>
+  <h1><span class="pulse"></span> External Script &amp; Request Monitor</h1>
+  <div class="controls">
+    <button id="btn-toggle" class="active" onclick="toggleMonitoring()">Monitoring ON</button>
+    <button onclick="exportLog()">Export JSON</button>
+    <button onclick="exportCSV()">Export CSV</button>
+    <button class="danger" onclick="clearLog()">Clear Log</button>
+  </div>
+</header>
+
+<div class="stats-bar">
+  <div class="stat-card">
+    <div class="label">Total Events</div>
+    <div class="value accent" id="stat-total">0</div>
+  </div>
+  <div class="stat-card">
+    <div class="label">External Scripts</div>
+    <div class="value danger" id="stat-scripts">0</div>
+  </div>
+  <div class="stat-card">
+    <div class="label">Network Requests</div>
+    <div class="value warn" id="stat-network">0</div>
+  </div>
+  <div class="stat-card">
+    <div class="label">Hidden / Sub-Visual</div>
+    <div class="value danger" id="stat-hidden">0</div>
+  </div>
+  <div class="stat-card">
+    <div class="label">WebSocket / Streams</div>
+    <div class="value success" id="stat-ws">0</div>
+  </div>
+</div>
+
+<div class="content">
+  <div class="section-title">Live Event Log</div>
+
+  <div class="filter-bar" id="filter-bar">
+    <button class="active" data-filter="all" onclick="setFilter('all',this)">All</button>
+    <button data-filter="script" onclick="setFilter('script',this)">Scripts</button>
+    <button data-filter="xhr" onclick="setFilter('xhr',this)">XHR</button>
+    <button data-filter="fetch" onclick="setFilter('fetch',this)">Fetch</button>
+    <button data-filter="websocket" onclick="setFilter('websocket',this)">WebSocket</button>
+    <button data-filter="iframe" onclick="setFilter('iframe',this)">Iframes</button>
+    <button data-filter="css" onclick="setFilter('css',this)">CSS</button>
+    <button data-filter="image" onclick="setFilter('image',this)">Images</button>
+    <button data-filter="beacon" onclick="setFilter('beacon',this)">Beacons</button>
+    <button data-filter="worker" onclick="setFilter('worker',this)">Workers</button>
+    <button data-filter="eventsource" onclick="setFilter('eventsource',this)">EventSource</button>
+    <button data-filter="hidden" onclick="setFilter('hidden',this)">Hidden</button>
+    <button data-filter="mutation" onclick="setFilter('mutation',this)">DOM Mutations</button>
+  </div>
+
+  <div class="table-wrapper">
+    <table class="log-table">
+      <thead>
+        <tr>
+          <th>Time</th>
+          <th>Type</th>
+          <th>Severity</th>
+          <th>Source / URL</th>
+          <th>Details</th>
+        </tr>
+      </thead>
+      <tbody id="log-body">
+      </tbody>
+    </table>
+    <div class="empty-state" id="empty-state">
+      <div class="icon">&#128269;</div>
+      <p>Monitoring active. External events will appear here in real time.</p>
+    </div>
+  </div>
+</div>
+
+<div class="detail-panel" id="detail-panel">
+  <h3>
+    Event Details
+    <button class="close-btn" onclick="closeDetail()">&times;</button>
+  </h3>
+  <div id="detail-content"></div>
+</div>
+
+<script>
+(function() {
+  "use strict";
+
+  let events = [];
+  let monitoring = true;
+  let activeFilter = "all";
+  let eventId = 0;
+
+  // ─── Utility ────────────────────────────────────────────────
+
+  function ts() {
+    return new Date().toISOString();
+  }
+
+  function isExternal(url) {
+    if (!url) return false;
+    try {
+      const u = new URL(url, location.href);
+      return u.origin !== location.origin;
+    } catch { return false; }
+  }
+
+  function classifySeverity(type, url, extra) {
+    if (type === "hidden" || type === "iframe") return "high";
+    if (type === "script") return isExternal(url) ? "high" : "medium";
+    if (type === "websocket" || type === "eventsource") return "medium";
+    if (type === "worker") return "medium";
+    if (type === "beacon") return "medium";
+    if (type === "mutation" && extra && extra.includes("script")) return "high";
+    if (type === "mutation") return "low";
+    if (isExternal(url)) return "medium";
+    return "info";
+  }
+
+  function badgeClass(type) {
+    const map = {
+      script: "badge-script", xhr: "badge-xhr", fetch: "badge-fetch",
+      websocket: "badge-ws", iframe: "badge-iframe", css: "badge-css",
+      image: "badge-img", beacon: "badge-beacon", worker: "badge-worker",
+      eventsource: "badge-evtsrc", hidden: "badge-hidden", mutation: "badge-mutation",
+      navigation: "badge-nav"
+    };
+    return map[type] || "badge-script";
+  }
+
+  function sevClass(sev) {
+    return { high: "sev-high", medium: "sev-medium", low: "sev-low", info: "sev-info" }[sev] || "sev-info";
+  }
+
+  function rowSevClass(sev) {
+    return "severity-" + sev;
+  }
+
+  function truncate(s, n) {
+    if (!s) return "—";
+    return s.length > n ? s.substring(0, n) + "..." : s;
+  }
+
+  // ─── Core Event Logger ──────────────────────────────────────
+
+  function logEvent(type, url, details, extra) {
+    if (!monitoring) return;
+
+    const severity = classifySeverity(type, url, details);
+    const ev = {
+      id: ++eventId,
+      time: ts(),
+      type: type,
+      severity: severity,
+      url: url || "N/A",
+      details: details || "",
+      extra: extra || {},
+      external: isExternal(url)
+    };
+
+    events.unshift(ev);
+    if (events.length > 5000) events.pop();
+
+    updateStats();
+    renderRow(ev);
+    hideEmpty();
+  }
+
+  // ─── UI Rendering ───────────────────────────────────────────
+
+  function updateStats() {
+    document.getElementById("stat-total").textContent = events.length;
+    document.getElementById("stat-scripts").textContent =
+      events.filter(e => e.type === "script").length;
+    document.getElementById("stat-network").textContent =
+      events.filter(e => ["xhr","fetch","beacon","navigation"].includes(e.type)).length;
+    document.getElementById("stat-hidden").textContent =
+      events.filter(e => e.type === "hidden" || (e.extra && e.extra.hidden)).length;
+    document.getElementById("stat-ws").textContent =
+      events.filter(e => ["websocket","eventsource","worker"].includes(e.type)).length;
+  }
+
+  function hideEmpty() {
+    document.getElementById("empty-state").style.display =
+      events.length > 0 ? "none" : "block";
+  }
+
+  function renderRow(ev) {
+    if (activeFilter !== "all" && ev.type !== activeFilter) return;
+
+    const tbody = document.getElementById("log-body");
+    const tr = document.createElement("tr");
+    tr.className = rowSevClass(ev.severity);
+    tr.dataset.id = ev.id;
+    tr.style.cursor = "pointer";
+    tr.onclick = () => showDetail(ev);
+
+    const timeStr = ev.time.split("T")[1].split(".")[0];
+
+    tr.innerHTML =
+      '<td>' + timeStr + '</td>' +
+      '<td><span class="badge ' + badgeClass(ev.type) + '">' + ev.type + '</span></td>' +
+      '<td><span class="severity-tag ' + sevClass(ev.severity) + '">' + ev.severity + '</span></td>' +
+      '<td title="' + escapeAttr(ev.url) + '">' + truncate(ev.url, 60) + '</td>' +
+      '<td>' + truncate(ev.details, 50) + '</td>';
+
+    tbody.insertBefore(tr, tbody.firstChild);
+
+    // Cap visible rows
+    while (tbody.children.length > 500) {
+      tbody.removeChild(tbody.lastChild);
+    }
+  }
+
+  function escapeAttr(s) {
+    if (!s) return "";
+    return s.replace(/&/g,"&amp;").replace(/"/g,"&quot;").replace(/</g,"&lt;");
+  }
+
+  function rebuildTable() {
+    const tbody = document.getElementById("log-body");
+    tbody.innerHTML = "";
+    const filtered = activeFilter === "all"
+      ? events
+      : events.filter(e => e.type === activeFilter);
+
+    filtered.slice(0, 500).forEach(ev => {
+      renderRow(ev);
+    });
+    hideEmpty();
+  }
+
+  function showDetail(ev) {
+    const panel = document.getElementById("detail-panel");
+    const content = document.getElementById("detail-content");
+
+    const rows = [
+      { k: "Event ID", v: ev.id },
+      { k: "Timestamp", v: ev.time },
+      { k: "Type", v: ev.type },
+      { k: "Severity", v: ev.severity },
+      { k: "URL / Source", v: ev.url },
+      { k: "External Origin", v: ev.external ? "YES" : "No (same-origin)" },
+      { k: "Details", v: ev.details },
+    ];
+
+    if (ev.extra) {
+      Object.keys(ev.extra).forEach(k => {
+        rows.push({ k: k, v: JSON.stringify(ev.extra[k]) });
+      });
+    }
+
+    content.innerHTML = rows.map(r =>
+      '<div class="detail-row">' +
+        '<div class="dk">' + r.k + '</div>' +
+        '<div class="dv">' + escapeAttr(String(r.v)) + '</div>' +
+      '</div>'
+    ).join("");
+
+    panel.classList.add("open");
+  }
+
+  // ─── Exposed functions ─────────────────────────────────────
+
+  window.closeDetail = function() {
+    document.getElementById("detail-panel").classList.remove("open");
+  };
+
+  window.toggleMonitoring = function() {
+    monitoring = !monitoring;
+    const btn = document.getElementById("btn-toggle");
+    btn.textContent = monitoring ? "Monitoring ON" : "Monitoring OFF";
+    btn.classList.toggle("active", monitoring);
+  };
+
+  window.clearLog = function() {
+    if (!confirm("Clear all logged events?")) return;
+    events = [];
+    document.getElementById("log-body").innerHTML = "";
+    updateStats();
+    hideEmpty();
+  };
+
+  window.setFilter = function(filter, btn) {
+    activeFilter = filter;
+    document.querySelectorAll("#filter-bar button").forEach(b => b.classList.remove("active"));
+    btn.classList.add("active");
+    rebuildTable();
+  };
+
+  window.exportLog = function() {
+    const blob = new Blob([JSON.stringify(events, null, 2)], { type: "application/json" });
+    const a = document.createElement("a");
+    a.href = URL.createObjectURL(blob);
+    a.download = "monitor-log-" + new Date().toISOString().slice(0,19) + ".json";
+    a.click();
+  };
+
+  window.exportCSV = function() {
+    let csv = "ID,Time,Type,Severity,URL,External,Details\n";
+    events.forEach(e => {
+      csv += [e.id, e.time, e.type, e.severity, '"'+e.url+'"', e.external, '"'+e.details.replace(/"/g,'""')+'"'].join(",") + "\n";
+    });
+    const blob = new Blob([csv], { type: "text/csv" });
+    const a = document.createElement("a");
+    a.href = URL.createObjectURL(blob);
+    a.download = "monitor-log-" + new Date().toISOString().slice(0,19) + ".csv";
+    a.click();
+  };
+
+  // ━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━
+  //  MONITORS — Hooks into browser APIs to detect activity
+  // ━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━
+
+  // ── 1. Performance Observer: catch all network resource loads ──
+
+  try {
+    const perfObs = new PerformanceObserver(list => {
+      list.getEntries().forEach(entry => {
+        const url = entry.name;
+        const itype = entry.initiatorType;
+
+        let type = "fetch";
+        if (itype === "script") type = "script";
+        else if (itype === "xmlhttprequest") type = "xhr";
+        else if (itype === "fetch") type = "fetch";
+        else if (itype === "css" || itype === "link") type = "css";
+        else if (itype === "img" || itype === "image") type = "image";
+        else if (itype === "iframe" || itype === "subdocument") type = "iframe";
+        else if (itype === "beacon") type = "beacon";
+        else if (itype === "navigation") type = "navigation";
+        else type = itype || "unknown";
+
+        const dur = entry.duration ? entry.duration.toFixed(1) + "ms" : "";
+        const size = entry.transferSize ? (entry.transferSize / 1024).toFixed(1) + "KB" : "";
+
+        logEvent(type, url,
+          "Loaded via " + itype + (dur ? " | " + dur : "") + (size ? " | " + size : ""),
+          { duration: entry.duration, transferSize: entry.transferSize, initiator: itype }
+        );
+      });
+    });
+    perfObs.observe({ type: "resource", buffered: true });
+  } catch (e) {
+    console.warn("PerformanceObserver not supported:", e);
+  }
+
+  // ── 2. Intercept XMLHttpRequest ──
+
+  const origOpen = XMLHttpRequest.prototype.open;
+  const origSend = XMLHttpRequest.prototype.send;
+
+  XMLHttpRequest.prototype.open = function(method, url) {
+    this._monMethod = method;
+    this._monUrl = url;
+    return origOpen.apply(this, arguments);
+  };
+
+  XMLHttpRequest.prototype.send = function(body) {
+    const method = this._monMethod;
+    const url = this._monUrl;
+    logEvent("xhr", String(url),
+      method.toUpperCase() + " request" + (body ? " (has body)" : ""),
+      { method: method, hasBody: !!body }
+    );
+    return origSend.apply(this, arguments);
+  };
+
+  // ── 3. Intercept fetch() ──
+
+  const origFetch = window.fetch;
+  window.fetch = function(input, init) {
+    const url = (typeof input === "string") ? input : (input && input.url ? input.url : String(input));
+    const method = (init && init.method) ? init.method : "GET";
+
+    logEvent("fetch", url,
+      method.toUpperCase() + " fetch request",
+      { method: method, hasBody: !!(init && init.body) }
+    );
+
+    return origFetch.apply(this, arguments);
+  };
+
+  // ── 4. Intercept WebSocket ──
+
+  const OrigWS = window.WebSocket;
+  window.WebSocket = function(url, protocols) {
+    logEvent("websocket", url,
+      "WebSocket connection opened" + (protocols ? " [" + protocols + "]" : ""),
+      { protocols: protocols }
+    );
+
+    const ws = new OrigWS(url, protocols);
+
+    ws.addEventListener("message", function(e) {
+      logEvent("websocket", url,
+        "WS message received (" + (typeof e.data === "string" ? e.data.length + " chars" : "binary") + ")",
+        { direction: "inbound" }
+      );
+    });
+
+    ws.addEventListener("close", function(e) {
+      logEvent("websocket", url,
+        "WS closed (code: " + e.code + ")",
+        { code: e.code, reason: e.reason }
+      );
+    });
+
+    return ws;
+  };
+  window.WebSocket.prototype = OrigWS.prototype;
+  window.WebSocket.CONNECTING = OrigWS.CONNECTING;
+  window.WebSocket.OPEN = OrigWS.OPEN;
+  window.WebSocket.CLOSING = OrigWS.CLOSING;
+  window.WebSocket.CLOSED = OrigWS.CLOSED;
+
+  // ── 5. Intercept EventSource (SSE) ──
+
+  const OrigES = window.EventSource;
+  if (OrigES) {
+    window.EventSource = function(url, config) {
+      logEvent("eventsource", url,
+        "EventSource (SSE) stream opened",
+        { withCredentials: config && config.withCredentials }
+      );
+      return new OrigES(url, config);
+    };
+    window.EventSource.prototype = OrigES.prototype;
+  }
+
+  // ── 6. Intercept sendBeacon ──
+
+  if (navigator.sendBeacon) {
+    const origBeacon = navigator.sendBeacon.bind(navigator);
+    navigator.sendBeacon = function(url, data) {
+      logEvent("beacon", url,
+        "Beacon sent" + (data ? " (" + (typeof data === "string" ? data.length + " chars" : "blob/formdata") + ")" : ""),
+        { hasData: !!data }
+      );
+      return origBeacon(url, data);
+    };
+  }
+
+  // ── 7. Intercept Worker / SharedWorker ──
+
+  const OrigWorker = window.Worker;
+  if (OrigWorker) {
+    window.Worker = function(url, opts) {
+      logEvent("worker", typeof url === "string" ? url : "blob-worker",
+        "Web Worker created" + (opts && opts.type ? " (type: " + opts.type + ")" : ""),
+        { workerType: opts && opts.type }
+      );
+      return new OrigWorker(url, opts);
+    };
+    window.Worker.prototype = OrigWorker.prototype;
+  }
+
+  const OrigSW = window.SharedWorker;
+  if (OrigSW) {
+    window.SharedWorker = function(url, opts) {
+      logEvent("worker", typeof url === "string" ? url : "blob-shared-worker",
+        "Shared Worker created",
+        { shared: true }
+      );
+      return new OrigSW(url, opts);
+    };
+    window.SharedWorker.prototype = OrigSW.prototype;
+  }
+
+  // ── 8. MutationObserver: detect injected scripts, iframes, hidden elements ──
+
+  const observer = new MutationObserver(mutations => {
+    mutations.forEach(mut => {
+      mut.addedNodes.forEach(node => {
+        if (node.nodeType !== 1) return; // element nodes only
+
+        const tag = node.tagName ? node.tagName.toLowerCase() : "";
+
+        // Detect script injections
+        if (tag === "script") {
+          const src = node.src || "(inline)";
+          logEvent("mutation", src,
+            "Script tag injected into DOM" + (node.async ? " [async]" : "") + (node.defer ? " [defer]" : ""),
+            { inline: !node.src, async: node.async, defer: node.defer }
+          );
+        }
+
+        // Detect iframe injections
+        if (tag === "iframe") {
+          logEvent("mutation", node.src || "(no src)",
+            "Iframe injected into DOM" + (node.sandbox ? " [sandboxed]" : ""),
+            { sandbox: node.sandbox ? node.sandbox.value : null, hidden: isHidden(node) }
+          );
+        }
+
+        // Detect hidden/sub-visual elements
+        if (isHidden(node) && (tag === "script" || tag === "iframe" || tag === "img" || tag === "link" || tag === "object" || tag === "embed")) {
+          logEvent("hidden", node.src || node.href || "(no url)",
+            "Hidden " + tag + " element detected (sub-visual)",
+            { tag: tag, visibility: getVisibilityInfo(node) }
+          );
+        }
+
+        // Recursively check children of added nodes
+        if (node.querySelectorAll) {
+          node.querySelectorAll("script, iframe, link[rel=stylesheet], img, object, embed").forEach(child => {
+            const ctag = child.tagName.toLowerCase();
+            if (ctag === "script") {
+              logEvent("mutation", child.src || "(inline)",
+                "Nested script injected",
+                { inline: !child.src }
+              );
+            }
+            if (isHidden(child)) {
+              logEvent("hidden", child.src || child.href || "(no url)",
+                "Hidden nested " + ctag + " detected (sub-visual)",
+                { tag: ctag, visibility: getVisibilityInfo(child) }
+              );
+            }
+          });
+        }
+      });
+    });
+  });
+
+  observer.observe(document.documentElement, {
+    childList: true,
+    subtree: true
+  });
+
+  // ── 9. Detect hidden / sub-visual elements already present ──
+
+  function isHidden(el) {
+    if (!el || !el.getBoundingClientRect) return false;
+    const style = window.getComputedStyle(el);
+    const rect = el.getBoundingClientRect();
+    return (
+      style.display === "none" ||
+      style.visibility === "hidden" ||
+      parseFloat(style.opacity) === 0 ||
+      (rect.width <= 1 && rect.height <= 1) ||
+      rect.width === 0 || rect.height === 0 ||
+      (rect.top < -1000 || rect.left < -1000)
+    );
+  }
+
+  function getVisibilityInfo(el) {
+    if (!el || !el.getBoundingClientRect) return {};
+    const style = window.getComputedStyle(el);
+    const rect = el.getBoundingClientRect();
+    return {
+      display: style.display,
+      visibility: style.visibility,
+      opacity: style.opacity,
+      width: rect.width,
+      height: rect.height,
+      top: rect.top,
+      left: rect.left
+    };
+  }
+
+  // Scan existing elements on page load
+  window.addEventListener("load", () => {
+    document.querySelectorAll("script[src], iframe, link[rel=stylesheet], img, object, embed").forEach(el => {
+      const tag = el.tagName.toLowerCase();
+      const url = el.src || el.href || "(none)";
+
+      if (tag === "script" && isExternal(url)) {
+        logEvent("script", url, "External script loaded on page", { tag: tag });
+      }
+      if (tag === "iframe") {
+        logEvent("iframe", url, "Iframe present on page", { hidden: isHidden(el) });
+      }
+      if (isHidden(el)) {
+        logEvent("hidden", url, "Pre-existing hidden " + tag + " element (sub-visual)", {
+          tag: tag, visibility: getVisibilityInfo(el)
+        });
+      }
+    });
+  });
+
+  // ── 10. ServiceWorker registration monitoring ──
+
+  if (navigator.serviceWorker) {
+    const origRegister = navigator.serviceWorker.register.bind(navigator.serviceWorker);
+    navigator.serviceWorker.register = function(url, opts) {
+      logEvent("worker", typeof url === "string" ? url : String(url),
+        "Service Worker registered" + (opts && opts.scope ? " (scope: " + opts.scope + ")" : ""),
+        { serviceWorker: true, scope: opts && opts.scope }
+      );
+      return origRegister(url, opts);
+    };
+  }
+
+  // ── 11. Intercept dynamic import() ──
+  // Note: Cannot fully intercept native dynamic import, but we watch for
+  // script tags created with type="module" via the MutationObserver above.
+
+  // ── 12. CSP violation reporting ──
+
+  document.addEventListener("securitypolicyviolation", function(e) {
+    logEvent("script", e.blockedURI || "unknown",
+      "CSP Violation: " + e.violatedDirective + " | " + (e.originalPolicy || "").substring(0, 80),
+      {
+        violatedDirective: e.violatedDirective,
+        effectiveDirective: e.effectiveDirective,
+        blockedURI: e.blockedURI,
+        disposition: e.disposition
+      }
+    );
+  });
+
+  // ── 13. Periodic check for newly injected hidden elements ──
+
+  setInterval(() => {
+    if (!monitoring) return;
+    document.querySelectorAll("script[src], iframe, object, embed").forEach(el => {
+      if (el.dataset.monScanned) return;
+      el.dataset.monScanned = "1";
+      const tag = el.tagName.toLowerCase();
+      const url = el.src || el.href || "(none)";
+      if (isHidden(el)) {
+        logEvent("hidden", url, "Periodic scan: hidden " + tag + " detected", {
+          tag: tag, visibility: getVisibilityInfo(el)
+        });
+      }
+    });
+  }, 3000);
+
+})();
+</script>
+
+</body>
+</html>
